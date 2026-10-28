@@ -40,7 +40,57 @@ graph TD
     SP -.->|SAGA: Consulta y Reserva Stock| SC
 ```
 
+## Modelo Entidad Relacion
+```mermaid
+erDiagram
+    USUARIO ||--o{ DIRECCION : "embebe"
+    USUARIO ||--o{ PEDIDO : "referencia usuario_id"
+    PEDIDO ||--|{ ITEM_PEDIDO : "embebe"
+    PEDIDO ||--|| PAGO : "embebe"
+    PRODUCTO ||--o{ ITEM_PEDIDO : "referencia producto_id"
 
+    USUARIO {
+        string id PK
+        string tipo_documento
+        string nro_documento
+        string nombre
+        string apellido
+        string email
+    }
+
+    DIRECCION {
+        string calle
+        string ciudad
+        string codigo_postal
+    }
+
+    PRODUCTO {
+        string producto_id PK
+        string nombre
+        string categoria
+        float precio
+        int stock
+    }
+
+    PEDIDO {
+        string pedido_id PK
+        string usuario_id FK
+        string estado
+        float total
+    }
+
+    ITEM_PEDIDO {
+        string producto_id FK
+        int cantidad
+        float precio_unitario
+    }
+
+    PAGO {
+        string metodo
+        string estado_pago
+        string transaccion_id
+    }
+```
 ## Diagrama de Flujo del Patrón SAGA
 *(Pendiente de generar)*
 
