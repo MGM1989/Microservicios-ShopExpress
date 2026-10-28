@@ -43,11 +43,11 @@ graph TD
 ## Modelo Entidad Relacion
 ```mermaid
 erDiagram
-    USUARIO ||--o{ DIRECCION : "embebe"
-    USUARIO ||--o{ PEDIDO : "referencia usuario_id"
-    PEDIDO ||--|{ ITEM_PEDIDO : "embebe"
-    PEDIDO ||--|| PAGO : "embebe"
-    PRODUCTO ||--o{ ITEM_PEDIDO : "referencia producto_id"
+    USUARIO["USUARIO — DynamoDB"] ||--o{ DIRECCION["DIRECCION — embebido DynamoDB"] : "embebe"
+    USUARIO["USUARIO — DynamoDB"] ||--o{ PEDIDO["PEDIDO — MongoDB"] : "referencia usuario_id"
+    PEDIDO["PEDIDO — MongoDB"] ||--|{ ITEM_PEDIDO["ITEM_PEDIDO — embebido MongoDB"] : "embebe"
+    PEDIDO["PEDIDO — MongoDB"] ||--|| PAGO["PAGO — embebido MongoDB"] : "embebe"
+    PRODUCTO["PRODUCTO — DynamoDB"] ||--o{ ITEM_PEDIDO["ITEM_PEDIDO — embebido MongoDB"] : "referencia producto_id"
 
     USUARIO {
         string id PK
