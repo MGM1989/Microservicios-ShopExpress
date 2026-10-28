@@ -26,23 +26,22 @@ Para cumplir con la regla de que ningún servicio acceda directamente a la base 
 ## Diagrama de Arquitectura
 ```mermaid
 graph TD
-    Client[Cliente / Aplicación] --> API[API Gateway]
+    Client["Cliente / Aplicación"] --> API["API Gateway"]
 
-    subgraph "Capa de Microservicios (Spring Boot)"
-        API --> SU[Servicio de Usuarios]
-        API --> SC[Servicio de Catálogo e Inventario]
-        API --> SP[Servicio de Pedidos y Pagos]
+    subgraph MICRO["Capa de Microservicios Spring Boot"]
+        API --> SU["Servicio de<br/>Usuarios"]
+        API --> SC["Servicio de Catálogo<br/>e Inventario"]
+        API --> SP["Servicio de Pedidos<br/>y Pagos"]
     end
 
-    subgraph "Capa de Persistencia Políglota (Docker Local)"
-        SU --> DB_DynU[(DynamoDB \n Usuarios)]
-        SC --> DB_DynC[(DynamoDB \n Catálogo)]
-        SP --> DB_Mongo[(MongoDB \n Pedidos)]
+    subgraph DATA["Capa de Persistencia Políglota"]
+        SU --> DB_DynU[("DynamoDB<br/>Usuarios")]
+        SC --> DB_DynC[("DynamoDB<br/>Catálogo")]
+        SP --> DB_Mongo[("MongoDB<br/>Pedidos")]
     end
 
-    %% Patrón SAGA - Orquestación centralizada en Pedidos
-    SP -.->|SAGA: Valida Identidad| SU
-    SP -.->|SAGA: Consulta y Reserva Stock| SC
+    SP -.->|SAGA identidad| SU
+    SP -.->|SAGA reserva stock| SC
 ```
 
 ## Modelo Entidad Relacion
