@@ -6,8 +6,11 @@ El diseño de la plataforma "ShopExpress" se fundamenta en una arquitectura de m
 
 Las decisiones tecnológicas se detallan a continuación:
 **1. Servicio de Usuarios y Servicio de Catálogo e Inventario**
+
     **Tecnología seleccionada:** Amazon DynamoDB (implementado vía dynamodb-local en Docker).
+
     **Justificación:** El requerimiento exige que la lectura de usuarios y del catálogo sea extremadamente rápida y escalable, priorizando explícitamente la disponibilidad y la tolerancia a particiones (sistemas AP) y aceptando la consistencia eventual. DynamoDB se alinea perfectamente con este escenario, ya que su modelo de lectura por defecto opera con consistencia eventual, ofreciendo un rendimiento predecible y una escalabilidad casi infinita. Adicionalmente, la elección resulta estratégica para los tiempos del proyecto: al haber investigado y expuesto sobre la historia, el diseño de esquemas y la ejecución de consultas con PartiQL de DynamoDB durante la Tarea 1, se cuenta con una base teórica sólida que asegura una implementación ágil y libre de una curva de aprendizaje pronunciada.
+    
     **Modelado de Datos:** Se aplica un patrón de referencia para cruzar dominios; el microservicio de catálogo gestiona los productos de forma independiente, y cualquier cruce de información con los usuarios se hace referenciando los identificadores únicos (IDs) a través de peticiones de red, manteniendo el desacoplamiento total.
 
 **2. Servicio de Pedidos y Pagos**
