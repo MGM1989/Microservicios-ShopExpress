@@ -19,9 +19,9 @@ Las decisiones tecnológicas se detallan a continuación:
 
 
 ## Diagrama de Arquitectura
+```mermaid
 graph TD
     Client[Cliente / Aplicación] --> API[API Gateway]
-
 
     subgraph "Capa de Microservicios (Spring Boot)"
         API --> SU[Servicio de Usuarios]
@@ -29,17 +29,16 @@ graph TD
         API --> SP[Servicio de Pedidos y Pagos]
     end
 
-
     subgraph "Capa de Persistencia Políglota (Docker Local)"
         SU --> DB_DynU[(DynamoDB \n Usuarios)]
         SC --> DB_DynC[(DynamoDB \n Catálogo)]
         SP --> DB_Mongo[(MongoDB \n Pedidos)]
     end
 
-
     %% Patrón SAGA - Orquestación centralizada en Pedidos
     SP -.->|SAGA: Valida Identidad| SU
     SP -.->|SAGA: Consulta y Reserva Stock| SC
+```
 
 
 ## Diagrama de Flujo del Patrón SAGA
