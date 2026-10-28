@@ -1,0 +1,16 @@
+# Maven
+target/
+*.class
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Entorno / secretos
+.env
+.env.*
+!.env.example
+
+# Enunciado de la tarea
+TareaNOSQL.docx

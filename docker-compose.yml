@@ -1,0 +1,30 @@
+services:
+  mongodb-pedidos:
+    image: mongo:7
+    container_name: shopexpress-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: pedidos
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  dynamodb-catalogo-usuarios:
+    image: amazon/dynamodb-local:latest
+    container_name: shopexpress-dynamo
+    ports:
+      - "8000:8000"
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/data"]
+    volumes:
+      - dynamo_data:/data
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+  dynamo_data:
