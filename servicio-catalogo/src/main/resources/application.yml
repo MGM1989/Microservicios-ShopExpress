@@ -8,4 +8,12 @@ spring:
 aws:
   region: us-east-1
   dynamodb:
-    endpoint: http://localhost:8000
+    endpoint: ${AWS_DYNAMODB_ENDPOINT:http://localhost:8000}
+    create-tables: true
+    table-name: Productos
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

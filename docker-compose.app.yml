@@ -1,0 +1,41 @@
+include:
+  - docker-compose.yml
+
+services:
+  servicio-usuarios:
+    build: ./servicio-usuarios
+    container_name: shopexpress-usuarios
+    ports:
+      - "8081:8081"
+    environment:
+      AWS_DYNAMODB_ENDPOINT: http://dynamodb-catalogo-usuarios:8000
+      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+    depends_on:
+      - dynamodb-catalogo-usuarios
+    restart: unless-stopped
+
+  servicio-catalogo:
+    build: ./servicio-catalogo
+    container_name: shopexpress-catalogo
+    ports:
+      - "8082:8082"
+    environment:
+      AWS_DYNAMODB_ENDPOINT: http://dynamodb-catalogo-usuarios:8000
+      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+    depends_on:
+      - dynamodb-catalogo-usuarios
+    restart: unless-stopped
+
+  servicio-pedidos:
+    build: ./servicio-pedidos
+    container_name: shopexpress-pedidos
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://mongodb-pedidos:27017/pedidos
+    depends_on:
+      mongodb-pedidos:
+        condition: service_healthy
+    restart: unless-stopped

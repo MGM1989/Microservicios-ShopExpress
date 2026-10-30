@@ -112,8 +112,11 @@ erDiagram
 
 ## Comandos de Ejecución
 1. Levantar bases de datos: `docker compose up -d`
-2. Construir microservicios: *(Ej. `mvn clean install`)*
-3. Levantar contenedores de aplicaciones: `docker compose -f docker-compose.app.yml up --build`
+2. Levantar microservicios: `docker compose -f docker-compose.app.yml up --build`
+3. Swagger (etapa 1: cada API expone `GET /api/health`):
+   - Usuarios: http://localhost:8081/swagger-ui.html
+   - Catálogo: http://localhost:8082/swagger-ui.html
+   - Pedidos: http://localhost:8083/swagger-ui.html
 
 ## Testeo
 Se adjunta la colección de Postman `ShopExpress.postman_collection.json` en la raíz del proyecto para evidenciar el testeo de los endpoints requeridos.

@@ -1,0 +1,98 @@
+Bitácora de implementación — ShopExpress
+Etapa 1: base ejecutable, Swagger y tablas DynamoDB
+Fecha: 30/10/2026
+
+Este archivo resume las dificultades reales de la etapa 1, para la defensa y para no repetir los mismos callejones en las etapas siguientes.
+
+
+1. Spring Boot 4 y Swagger (springdoc)
+
+El proyecto nació en Spring Boot 4.1.2 (starter webmvc, no el clásico starter-web).
+springdoc 2.x (el que aparece en la mayoría de tutoriales de Boot 3) no sirve: o no arranca o Swagger da 404.
+
+Solución: springdoc-openapi-starter-webmvc-ui 3.2.0, alineado con Boot 4.1.
+Verificación: /swagger-ui.html redirige a /swagger-ui/index.html y /v3/api-docs responde 200.
+
+
+2. El wrapper de Maven no era ejecutable
+
+./mvnw devolvía "Permission denied" en WSL. El Dockerfile ya hace chmod +x, pero en el host hay que dar permiso una vez:
+
+  chmod +x servicio-usuarios/mvnw servicio-catalogo/mvnw servicio-pedidos/mvnw
+
+
+3. DynamoDB Local + AWS SDK v2: la llamada “cuelga”
+
+El puerto 8000 estaba abierto (TCP OK) y curl al host devolvía 400 (falta de firma, esperado).
+El SDK v2, en cambio, se quedaba 5 segundos y caía por timeout. No era “DynamoDB apagado”: era el cliente HTTP del SDK (Netty / checksums por defecto en 2.30) hablando mal con DynamoDB Local.
+
+Qué se probó y no alcanzó por sí solo:
+- clip-path / url() no aplica acá (eso fue el SVG del README, otra etapa)
+- ApplicationRunner para crear tablas (en Boot 4 el cliente quedaba lazy si nadie lo inyectaba)
+- extra_hosts + host.docker.internal
+- pin de imagen amazon/dynamodb-local:2.5.4 manteniendo sqlite en disco
+
+Qué sí funcionó:
+- Cliente Apache (software.amazon.awssdk:apache-client) en lugar del HTTP client por defecto
+- aws.requestChecksumCalculation / AWS_REQUEST_CHECKSUM_CALCULATION = WHEN_REQUIRED
+- Inyectar DynamoDbClient en HealthController para forzar la creación del bean al arranque
+- Crear las tablas dentro del @Bean dynamoDbClient(), no en un runner “invisible”
+
+
+4. sqlite4java en WSL/Docker (el problema de fondo)
+
+Con -sharedDb -dbPath /data, DynamoDB Local logueaba:
+
+  SQLiteQueue[shared-local-instance.db]: stopped abnormally, reincarnating
+  DB[...]: wasn't disposed before finalizing
+
+En ese estado el proceso escuchaba el puerto, pero CreateTable/ListTables firmados no terminaban nunca.
+Cambiar de versión 3.3.2 a 2.5.4 sin borrar el volumen reutilizaba un .db incompatible y el sqlite seguía roto.
+
+Solución para la demo (aceptable en un trabajo de curso):
+
+  command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
+
+Las tablas viven en memoria. Si se reinicia el contenedor de DynamoDB, se pierden; las apps las vuelven a crear al arrancar.
+No usar el volumen dynamo_data en esta etapa.
+
+
+5. Dos archivos Compose y la red
+
+docker-compose.yml (bases) + docker-compose.app.yml (apps).
+docker-compose.app.yml hace include del primero para que sea el mismo proyecto y el DNS dynamodb-catalogo-usuarios:8000 funcione.
+Si se levantan como proyectos distintos, el nombre de servicio no resuelve; solo el container_name.
+
+Comando que debe usarse:
+
+  docker compose up -d
+  docker compose -f docker-compose.app.yml up --build -d
+
+
+6. Orden de arranque
+
+Usuarios y Catálogo reintentan 15 veces (2 s) si DynamoDB aún no responde. Pedidos espera el healthcheck de Mongo.
+Aun así, si DynamoDB está “escuchando pero sqlite muerto”, los reintentos no sirven: hay que recrear el contenedor in-memory.
+
+
+Cómo se validó la etapa 1 (estado OK)
+
+  curl http://localhost:8081/api/health
+  curl http://localhost:8082/api/health
+  curl http://localhost:8083/api/health
+
+Usuarios y Catálogo deben devolver status UP y dynamodb: [Productos, Usuarios].
+
+  http://localhost:8081/swagger-ui.html
+  http://localhost:8082/swagger-ui.html
+  http://localhost:8083/swagger-ui.html
+
+Cada Swagger muestra GET /api/health.
+
+
+Lecciones para la etapa 2
+
+- No dar por hecho que un puerto abierto = API usable (DynamoDB Local lo demostró).
+- Forzar el cliente DynamoDB al startup (no dejarlo lazy).
+- No volver a -dbPath/sqlite en WSL sin probar antes in-memory.
+- Los CRUD de usuarios deben usar la tabla Usuarios con PK id, que ya se crea al arranque.

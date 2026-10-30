@@ -6,4 +6,10 @@ spring:
     name: servicio-pedidos
   data:
     mongodb:
-      uri: mongodb://localhost:27017/pedidos
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/pedidos}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html

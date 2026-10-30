@@ -16,15 +16,12 @@ services:
     restart: unless-stopped
 
   dynamodb-catalogo-usuarios:
-    image: amazon/dynamodb-local:latest
+    image: amazon/dynamodb-local:2.5.4
     container_name: shopexpress-dynamo
     ports:
       - "8000:8000"
-    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-dbPath", "/data"]
-    volumes:
-      - dynamo_data:/data
+    command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
     restart: unless-stopped
 
 volumes:
   mongo_data:
-  dynamo_data:

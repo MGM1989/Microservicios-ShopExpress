@@ -1,0 +1,6 @@
+aws:
+  region: us-east-1
+  dynamodb:
+    endpoint: http://localhost:8000
+    create-tables: false
+    table-name: Usuarios
