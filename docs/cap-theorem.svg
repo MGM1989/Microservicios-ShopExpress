@@ -1,13 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 720" width="1000" height="720" role="img" aria-labelledby="cap-title cap-desc">
-  <title id="cap-title">Teorema CAP</title>
-  <desc id="cap-desc">Diagrama de Venn del teorema CAP. MongoDB se ubica en CP (consistencia y tolerancia a particiones). DynamoDB se ubica en AP (disponibilidad y tolerancia a particiones). Las bases CA asumen red estable.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 720" width="1000" height="720">
+  <title>Teorema CAP</title>
   <rect width="1000" height="720" fill="#ffffff"/>
-
-  <defs>
-    <clipPath id="clip-c"><circle cx="500" cy="264" r="172"/></clipPath>
-    <clipPath id="clip-p"><circle cx="382" cy="454" r="172"/></clipPath>
-    <clipPath id="clip-a"><circle cx="618" cy="454" r="172"/></clipPath>
-  </defs>
 
   <text x="500" y="42" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="22" font-weight="700" fill="#1a365d">Teorema CAP</text>
   <text x="500" y="68" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#4a5568">Clasificación clásica simplificada de bases de datos</text>
@@ -16,15 +9,9 @@
   <circle cx="382" cy="454" r="172" fill="#f7fbff" stroke="#2c5282" stroke-width="2.5"/>
   <circle cx="618" cy="454" r="172" fill="#f7fbff" stroke="#2c5282" stroke-width="2.5"/>
 
-  <g clip-path="url(#clip-c)">
-    <circle cx="382" cy="454" r="172" fill="#111111"/>
-  </g>
-  <g clip-path="url(#clip-c)">
-    <circle cx="618" cy="454" r="172" fill="#111111"/>
-  </g>
-  <g clip-path="url(#clip-p)">
-    <circle cx="618" cy="454" r="172" fill="#111111"/>
-  </g>
+  <path d="M 329.98 290.05 A 172 172 0 0 1 552.02 427.95 A 172 172 0 0 1 329.98 290.05 Z" fill="#111111"/>
+  <path d="M 447.98 427.95 A 172 172 0 0 1 670.02 290.05 A 172 172 0 0 1 447.98 427.95 Z" fill="#111111"/>
+  <path d="M 500.00 579.14 A 172 172 0 0 1 500.00 328.86 A 172 172 0 0 1 500.00 579.14 Z" fill="#111111"/>
 
   <circle cx="500" cy="264" r="172" fill="none" stroke="#2c5282" stroke-width="2.5"/>
   <circle cx="382" cy="454" r="172" fill="none" stroke="#2c5282" stroke-width="2.5"/>
