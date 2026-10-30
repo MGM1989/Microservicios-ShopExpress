@@ -22,6 +22,19 @@ Las decisiones tecnológicas se detallan a continuación.
 
 Para cumplir con la regla de que ningún servicio acceda directamente a la base de datos de otro, el Servicio de Pedidos actúa como el orquestador central de la transacción. Al recibir un pedido, este servicio persistirá la intención de compra en MongoDB con estado **PROCESANDO** y se comunicará de forma asíncrona con los servicios de Usuarios y Catálogo (DynamoDB) para validar la identidad y descontar el stock, garantizando la integridad sin sacrificar la autonomía de cada componente.
 
+### Teorema CAP y persistencia políglota
+
+El diagrama sitúa las bases de datos según el teorema CAP (clasificación clásica simplificada). ShopExpress se ubica en **CP** (MongoDB) y **AP** (DynamoDB), alineado con los requerimientos de consistencia de pedidos frente a disponibilidad de lecturas.
+
+![Clasificación CAP de bases de datos](docs/cap-theorem.svg)
+
+| Tipo | Prioriza | Bases del diagrama | ShopExpress |
+|---|---|---|---|
+| **CP** | Consistencia y tolerancia a particiones | Redis, MongoDB, HBase | **MongoDB** → Pedidos y pagos |
+| **AP** | Disponibilidad y tolerancia a particiones | DynamoDB, Cassandra, CouchDB | **DynamoDB** → Usuarios y catálogo |
+| **CA** | Consistencia y disponibilidad | Redshift, SQL Server, MySQL, Vertica, SAP HANA, Neo4j, PostgreSQL | No aplica (asume red estable) |
+
+La tabla resume la decisión: el Venn ilustra el mapa; las filas CP y AP justifican las tecnologías elegidas. Un mismo motor puede operar en más de un vértice según su configuración; aquí se usa la clasificación clásica del diagrama.
 
 ## Diagrama de Arquitectura
 ```mermaid
