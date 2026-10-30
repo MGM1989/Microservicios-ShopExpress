@@ -96,3 +96,54 @@ Lecciones para la etapa 2
 - Forzar el cliente DynamoDB al startup (no dejarlo lazy).
 - No volver a -dbPath/sqlite en WSL sin probar antes in-memory.
 - Los CRUD de usuarios deben usar la tabla Usuarios con PK id, que ya se crea al arranque.
+
+
+Etapa 3: catálogo, stock y escritura condicional
+Fecha: 30/10/2026
+
+El objetivo era dejar el inventario listo para la SAGA: alta/consulta de productos y dos operaciones atómicas (descontar y restaurar) que no permitan sobreventa.
+
+
+1. Reusar el patrón que ya funcionó en usuarios
+
+Misma receta: DynamoDbClient Apache + checksums WHEN_REQUIRED, creación de tabla Productos (PK producto_id) dentro del @Bean, y recrear la tabla si un put/get/update recibe ResourceNotFoundException (DynamoDB Local in-memory se vacía si se reinicia el contenedor de datos y las apps siguen vivas).
+
+
+2. La sobreventa no se evita con un GET + PUT
+
+Un GET de stock y luego un PUT abierto deja una ventana: dos pedidos leen stock=1 y ambos escriben 0. En DynamoDB la garantía es UpdateItem con ConditionExpression:
+
+  attribute_exists(producto_id) AND stock >= :qty
+  SET stock = stock - :qty
+
+Si la condición falla, DynamoDB no cambia el ítem. El servicio traduce eso a 409 Stock insuficiente, o a 404 si el producto ni siquiera existe (attribute_exists). Restaurar usa solo attribute_exists y suma stock (compensación SAGA).
+
+
+3. ConditionalCheckFailedException hay que mapearlo siempre
+
+Si se recrea la tabla y se reintenta el UpdateItem, el fallo condicional del segundo intento no puede quedar sin catch (sería un 500). El repositorio envuelve ambos intentos.
+
+
+4. GET vs POST y el decimal del precio
+
+POST con precio 25.50 y GET posterior 25.5 es el tipo Number de DynamoDB: no guarda ceros a la derecha. No es pérdida de precisión para esta demo.
+
+
+Cómo se validó la etapa 3 (estado OK)
+
+  POST /api/productos prod_001 stock=2  → 201
+  POST .../descontar-stock cantidad=2   → 200 stock=0
+  POST .../descontar-stock cantidad=1   → 409 Stock insuficiente
+  POST .../restaurar-stock cantidad=2   → 200 stock=2
+  GET  /api/productos/prod_001          → 200 stock=2
+  POST duplicado                        → 409
+  GET  prod_no_existe                   → 404
+
+Swagger Catálogo (http://localhost:8082/swagger-ui.html) lista Productos además de health.
+
+
+Lecciones para la etapa 4
+
+- Pedidos no debe “restar stock en Mongo”: llama a estos dos endpoints.
+- El paso de reserva de stock de la SAGA es descontar-stock; la compensación es restaurar-stock.
+- Un 409 de catálogo debe abortar la cadena y compensar lo ya hecho.

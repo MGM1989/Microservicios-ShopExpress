@@ -23,5 +23,21 @@ services:
     command: ["-jar", "DynamoDBLocal.jar", "-inMemory", "-sharedDb"]
     restart: unless-stopped
 
+  dynamodb-admin:
+    image: aaronshaf/dynamodb-admin:latest
+    container_name: shopexpress-dynamo-admin
+    ports:
+      - "8001:8001"
+    environment:
+      DYNAMO_ENDPOINT: http://dynamodb-catalogo-usuarios:8000
+      AWS_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+      AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+    depends_on:
+      - dynamodb-catalogo-usuarios
+    restart: unless-stopped
+
 volumes:
   mongo_data:

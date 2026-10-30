@@ -14,6 +14,6 @@ public class OpenApiConfig {
 		return new OpenAPI().info(new Info()
 				.title("ShopExpress - Servicio de Catálogo e Inventario")
 				.version("1.0")
-				.description("Productos, precios y stock. Puerto 8082."));
+				.description("Productos, precios y stock. POST/GET /api/productos y movimientos de stock para la SAGA. Puerto 8082."));
 	}
 }
