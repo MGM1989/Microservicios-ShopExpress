@@ -2,6 +2,7 @@ package com.shopexpress.pedidos.web;
 
 import java.util.Map;
 
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -10,8 +11,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class HealthController {
 
+	private final MongoTemplate mongoTemplate;
+
+	public HealthController(MongoTemplate mongoTemplate) {
+		this.mongoTemplate = mongoTemplate;
+	}
+
 	@GetMapping("/health")
 	public Map<String, String> health() {
-		return Map.of("status", "UP", "service", "servicio-pedidos");
+		return Map.of(
+				"status", "UP",
+				"service", "servicio-pedidos",
+				"mongodb", mongoTemplate.getCollectionNames().toString());
 	}
 }

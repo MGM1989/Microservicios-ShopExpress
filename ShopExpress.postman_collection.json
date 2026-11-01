@@ -1,0 +1,507 @@
+{
+  "info": {
+    "name": "ShopExpress",
+    "description": "Guion de demo (10 min).\n\nRecomendado: `./scripts/reset-demo.sh` (carga usr_demo, prod_feliz stock 5, prod_comp stock 2, prod_agotado stock 0).\n\n1. Environment **ShopExpress localhost**.\n2. **00 Health**, **01 Feliz**, **02 Compensación**, **03 Cortes**.\n\nSitio de defensa: http://localhost:8080\nDynamoDB Admin: http://localhost:8001\nCompass: mongodb://localhost:27017",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "usuario_feliz", "value": "usr_demo" },
+    { "key": "producto_feliz", "value": "prod_feliz" },
+    { "key": "usuario_comp", "value": "usr_demo" },
+    { "key": "producto_comp", "value": "prod_comp" },
+    { "key": "producto_agotado", "value": "prod_agotado" },
+    { "key": "pedido_id_feliz", "value": "" },
+    { "key": "pedido_id_comp", "value": "" },
+    { "key": "stock_antes_comp", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "00 Health",
+      "item": [
+        {
+          "name": "Health usuarios",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('usuarios UP', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{usuarios_url}}/api/health"
+          }
+        },
+        {
+          "name": "Health catálogo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('catálogo UP', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogo_url}}/api/health"
+          }
+        },
+        {
+          "name": "Health pedidos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('pedidos UP', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{pedidos_url}}/api/health"
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Feliz",
+      "description": "Usuario + producto con stock 2 → pedido cantidad 1 → COMPLETADO y stock 1. El saga_log debe listar los 6 handlers CoR.",
+      "item": [
+        {
+          "name": "1. Crear usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('usuario creado o ya existía', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{usuario_feliz}}\",\n  \"tipo_documento\": \"DNI\",\n  \"nro_documento\": \"45000001\",\n  \"nombre\": \"Ana\",\n  \"apellido\": \"Demo\",\n  \"email\": \"ana.demo@shopexpress.test\",\n  \"direcciones\": [\n    {\n      \"calle\": \"Av. Defensa 8080\",\n      \"ciudad\": \"Montevideo\",\n      \"codigo_postal\": \"11000\"\n    }\n  ]\n}"
+            },
+            "url": "{{usuarios_url}}/api/usuarios"
+          }
+        },
+        {
+          "name": "2. Crear producto stock 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('producto creado o ya existía', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": \"{{producto_feliz}}\",\n  \"nombre\": \"Auriculares inalámbricos\",\n  \"categoria\": \"Audio\",\n  \"precio\": 25.5,\n  \"stock\": 5\n}"
+            },
+            "url": "{{catalogo_url}}/api/productos"
+          }
+        },
+        {
+          "name": "3. GET producto (stock inicial)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('producto visible', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(p.stock).to.be.at.least(1);",
+                  "});",
+                  "pm.collectionVariables.set('stock_antes_feliz', String(p.stock));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogo_url}}/api/productos/{{producto_feliz}}"
+          }
+        },
+        {
+          "name": "4. POST pedido (SAGA feliz)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('201 COMPLETADO', function () {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(p.estado).to.eql('COMPLETADO');",
+                  "  pm.expect(p.pago.estado_pago).to.eql('APROBADO');",
+                  "});",
+                  "pm.test('saga_log recorrió CoR hasta ConfirmarPedido', function () {",
+                  "  const log = (p.saga_log || []).join('\\n');",
+                  "  pm.expect(log).to.include('ValidadorDeDatos');",
+                  "  pm.expect(log).to.include('ValidadorDeUsuario');",
+                  "  pm.expect(log).to.include('ValidadorDeStock');",
+                  "  pm.expect(log).to.include('ReservarStock');",
+                  "  pm.expect(log).to.include('ProcesadorDePago');",
+                  "  pm.expect(log).to.include('ConfirmarPedido');",
+                  "});",
+                  "pm.collectionVariables.set('pedido_id_feliz', p.pedido_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuario_id\": \"{{usuario_feliz}}\",\n  \"items\": [\n    { \"producto_id\": \"{{producto_feliz}}\", \"cantidad\": 1 }\n  ],\n  \"pago\": { \"metodo\": \"TARJETA\" },\n  \"forzar_fallo_pago\": false\n}"
+            },
+            "url": "{{pedidos_url}}/api/pedidos"
+          }
+        },
+        {
+          "name": "5. GET pedido COMPLETADO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('GET COMPLETADO', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(p.estado).to.eql('COMPLETADO');",
+                  "  pm.expect(p.pedido_id).to.eql(pm.collectionVariables.get('pedido_id_feliz'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{pedidos_url}}/api/pedidos/{{pedido_id_feliz}}"
+          }
+        },
+        {
+          "name": "6. GET producto (stock bajó)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "const antes = Number(pm.collectionVariables.get('stock_antes_feliz'));",
+                  "pm.test('stock descontado en 1', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(p.stock).to.eql(antes - 1);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogo_url}}/api/productos/{{producto_feliz}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Compensación",
+      "description": "Reserva stock y el pago se fuerza a fallar. La SAGA restaura inventario. Pedido COMPENSADO (HTTP 409). El stock final debe coincidir con el inicial.",
+      "item": [
+        {
+          "name": "1. Crear usuario",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('usuario creado o ya existía', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{usuario_comp}}\",\n  \"tipo_documento\": \"DNI\",\n  \"nro_documento\": \"45000001\",\n  \"nombre\": \"Ana\",\n  \"apellido\": \"Demo\",\n  \"email\": \"ana.demo@shopexpress.test\",\n  \"direcciones\": [\n    {\n      \"calle\": \"Av. Defensa 8080\",\n      \"ciudad\": \"Montevideo\",\n      \"codigo_postal\": \"11000\"\n    }\n  ]\n}"
+            },
+            "url": "{{usuarios_url}}/api/usuarios"
+          }
+        },
+        {
+          "name": "2. Crear producto stock 2",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('producto creado o ya existía', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": \"{{producto_comp}}\",\n  \"nombre\": \"Webcam HD\",\n  \"categoria\": \"Periféricos\",\n  \"precio\": 30,\n  \"stock\": 2\n}"
+            },
+            "url": "{{catalogo_url}}/api/productos"
+          }
+        },
+        {
+          "name": "3. GET producto (stock antes)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('producto visible', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(p.stock).to.be.at.least(1);",
+                  "});",
+                  "pm.collectionVariables.set('stock_antes_comp', String(p.stock));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogo_url}}/api/productos/{{producto_comp}}"
+          }
+        },
+        {
+          "name": "4. POST pedido forzar_fallo_pago",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('409 COMPENSADO', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(p.estado).to.eql('COMPENSADO');",
+                  "  pm.expect(p.pago.estado_pago).to.eql('RECHAZADO');",
+                  "});",
+                  "pm.test('SAGA restauró stock', function () {",
+                  "  const log = (p.saga_log || []).join('\\n');",
+                  "  pm.expect(log).to.include('ReservarStock');",
+                  "  pm.expect(log).to.include('rechazo forzado');",
+                  "  pm.expect(log).to.include('restaurado');",
+                  "  pm.expect(log).to.include('COMPENSADO');",
+                  "});",
+                  "pm.collectionVariables.set('pedido_id_comp', p.pedido_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuario_id\": \"{{usuario_comp}}\",\n  \"items\": [\n    { \"producto_id\": \"{{producto_comp}}\", \"cantidad\": 1 }\n  ],\n  \"pago\": { \"metodo\": \"TARJETA\" },\n  \"forzar_fallo_pago\": true\n}"
+            },
+            "url": "{{pedidos_url}}/api/pedidos"
+          }
+        },
+        {
+          "name": "5. GET pedido COMPENSADO",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('GET COMPENSADO', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(p.estado).to.eql('COMPENSADO');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{pedidos_url}}/api/pedidos/{{pedido_id_comp}}"
+          }
+        },
+        {
+          "name": "6. GET producto (stock restaurado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "const antes = Number(pm.collectionVariables.get('stock_antes_comp'));",
+                  "pm.test('stock igual que al inicio (compensación)', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(p.stock).to.eql(antes);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{catalogo_url}}/api/productos/{{producto_comp}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Cortes (sin efecto remoto)",
+      "description": "Fallos antes de ReservarStock: no se llama a restaurar-stock. Pedido queda COMPENSADO.",
+      "item": [
+        {
+          "name": "Crear prod_agotado stock 0",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('producto agotado listo', function () {",
+                  "  pm.expect([201, 409]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": \"{{producto_agotado}}\",\n  \"nombre\": \"Cable agotado (demo 409)\",\n  \"categoria\": \"Accesorios\",\n  \"precio\": 5,\n  \"stock\": 0\n}"
+            },
+            "url": "{{catalogo_url}}/api/productos"
+          }
+        },
+        {
+          "name": "POST pedido usuario inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('404 sin reservar stock', function () {",
+                  "  pm.response.to.have.status(404);",
+                  "  pm.expect(p.estado).to.eql('COMPENSADO');",
+                  "  const log = (p.saga_log || []).join('\\n');",
+                  "  pm.expect(log).to.include('corte antes de reservar');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuario_id\": \"usr_no_existe\",\n  \"items\": [\n    { \"producto_id\": \"{{producto_feliz}}\", \"cantidad\": 1 }\n  ],\n  \"pago\": { \"metodo\": \"TARJETA\" }\n}"
+            },
+            "url": "{{pedidos_url}}/api/pedidos"
+          }
+        },
+        {
+          "name": "POST pedido stock insuficiente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const p = pm.response.json();",
+                  "pm.test('409 stock insuficiente', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(p.estado).to.eql('COMPENSADO');",
+                  "  pm.expect(p.mensaje_error).to.include('Stock insuficiente');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuario_id\": \"{{usuario_comp}}\",\n  \"items\": [\n    { \"producto_id\": \"{{producto_agotado}}\", \"cantidad\": 1 }\n  ],\n  \"pago\": { \"metodo\": \"TARJETA\" }\n}"
+            },
+            "url": "{{pedidos_url}}/api/pedidos"
+          }
+        }
+      ]
+    }
+  ]
+}

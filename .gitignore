@@ -14,3 +14,7 @@ target/
 
 # Enunciado de la tarea
 TareaNOSQL.docx
+
+# Sitio de defensa (solo local, no versionar)
+presentacion/
+docker-compose.presentacion.yml

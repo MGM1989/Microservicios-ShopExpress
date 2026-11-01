@@ -4,9 +4,14 @@ server:
 spring:
   application:
     name: servicio-pedidos
-  data:
-    mongodb:
-      uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/pedidos}
+  mongodb:
+    uri: ${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/pedidos}
+
+shopexpress:
+  usuarios:
+    base-url: ${SHOPEXPRESS_USUARIOS_BASE_URL:http://localhost:8081}
+  catalogo:
+    base-url: ${SHOPEXPRESS_CATALOGO_BASE_URL:http://localhost:8082}
 
 springdoc:
   api-docs:

@@ -1,0 +1,23 @@
+[
+  {
+    "producto_id": "prod_feliz",
+    "nombre": "Auriculares inalámbricos",
+    "categoria": "Audio",
+    "precio": 25.5,
+    "stock": 5
+  },
+  {
+    "producto_id": "prod_comp",
+    "nombre": "Webcam HD",
+    "categoria": "Periféricos",
+    "precio": 30,
+    "stock": 2
+  },
+  {
+    "producto_id": "prod_agotado",
+    "nombre": "Cable agotado (demo 409)",
+    "categoria": "Accesorios",
+    "precio": 5,
+    "stock": 0
+  }
+]

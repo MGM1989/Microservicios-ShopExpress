@@ -14,6 +14,6 @@ public class OpenApiConfig {
 		return new OpenAPI().info(new Info()
 				.title("ShopExpress - Servicio de Pedidos y Pagos")
 				.version("1.0")
-				.description("Orquestador SAGA y Chain of Responsibility. Puerto 8083."));
+				.description("Orquestador SAGA HTTP síncrona y Chain of Responsibility. POST/GET /api/pedidos. Puerto 8083."));
 	}
 }

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "usr_demo",
+    "tipo_documento": "DNI",
+    "nro_documento": "45000001",
+    "nombre": "Ana",
+    "apellido": "Demo",
+    "email": "ana.demo@shopexpress.test",
+    "direcciones": [
+      {
+        "calle": "Av. Defensa 8080",
+        "ciudad": "Montevideo",
+        "codigo_postal": "11000"
+      }
+    ]
+  }
+]

@@ -20,7 +20,7 @@ Las decisiones tecnológicas se detallan a continuación.
 
 ### 3. Orquestación y aislamiento
 
-Para cumplir con la regla de que ningún servicio acceda directamente a la base de datos de otro, el Servicio de Pedidos actúa como el orquestador central de la transacción. Al recibir un pedido, este servicio persistirá la intención de compra en MongoDB con estado **PROCESANDO** y se comunicará de forma asíncrona con los servicios de Usuarios y Catálogo (DynamoDB) para validar la identidad y descontar el stock, garantizando la integridad sin sacrificar la autonomía de cada componente.
+Para cumplir con la regla de que ningún servicio acceda directamente a la base de datos de otro, el Servicio de Pedidos actúa como el orquestador central de la transacción. Al recibir un pedido, persiste la intención de compra en MongoDB con estado **PROCESANDO** y llama por **HTTP síncrono** a Usuarios (identidad) y Catálogo (descuento condicional de stock). Si un paso con efecto falla, restaura el stock y deja el pedido en **COMPENSADO**. Ver [Decisión: SAGA HTTP síncrona](#decisión-saga-de-orquestación-http-síncrona).
 
 ### Teorema CAP y persistencia políglota
 
@@ -35,23 +35,23 @@ ShopExpress se ubica en **CP** (MongoDB) y **AP** (DynamoDB), alineado con los r
 ## Diagrama de Arquitectura
 ```mermaid
 graph TD
-    Client["Cliente / Aplicación"] --> API["API Gateway"]
-
-    subgraph MICRO["Capa de Microservicios Spring Boot"]
-        API --> SU["Servicio de<br/>Usuarios"]
-        API --> SC["Servicio de Catálogo<br/>e Inventario"]
-        API --> SP["Servicio de Pedidos<br/>y Pagos"]
-    end
+    Client["Postman / Swagger"] --> SU["Servicio de Usuarios<br/>:8081"]
+    Client --> SC["Servicio de Catálogo<br/>:8082"]
+    Client --> SP["Servicio de Pedidos<br/>:8083"]
 
     subgraph DATA["Capa de Persistencia Políglota"]
-        SU --> DB_DynU[("DynamoDB<br/>Usuarios")]
-        SC --> DB_DynC[("DynamoDB<br/>Catálogo")]
-        SP --> DB_Mongo[("MongoDB<br/>Pedidos")]
+        SU --> DB_DynU[("DynamoDB Usuarios")]
+        SC --> DB_DynC[("DynamoDB Catálogo")]
+        SP --> DB_Mongo[("MongoDB Pedidos")]
     end
 
-    SP -.->|SAGA identidad| SU
-    SP -.->|SAGA reserva stock| SC
+    SP -->|SAGA GET usuario| SU
+    SP -->|SAGA descontar / restaurar stock| SC
+
+    GW["API Gateway — fuera de alcance de la demo"] -.-> Client
 ```
+
+La demo pega a cada puerto. No hay API Gateway desplegado.
 
 ## Modelo Entidad Relacion
 ```mermaid
@@ -104,19 +104,130 @@ erDiagram
         string transaccion_id
     }
 ```
+## Decisión: SAGA de orquestación HTTP síncrona
+
+La letra pide **SAGA con orquestación** (Pedidos coordina pasos y compensaciones). No exige colas ni coreografía.
+
+Un diseño inicial asíncrono (mensajería) se descartó para la demo: en 10 minutos hay que mostrar cada paso en Postman/Swagger y el `saga_log` del GET. Orquestación HTTP síncrona es el mismo patrón (un orquestador, pasos, compensación) y se puede seguir request a request.
+
+| | Diseño inicial (README) | Implementación de la demo |
+|---|---|---|
+| Comunicación | Asíncrona | HTTP síncrono (`RestClient`) |
+| Patrón | SAGA | SAGA de orquestación (igual) |
+| Compensación | Restaurar stock | `POST .../restaurar-stock` si el corte es después de reservar |
+| Cómo se muestra | Colas / consumers | Postman + `saga_log` + DynamoDB Admin / Compass |
+
 ## Diagrama de Flujo del Patrón SAGA
-*(Pendiente de generar)*
+```mermaid
+sequenceDiagram
+    actor Demo as Postman / Swagger
+    participant Pedidos
+    participant Mongo as MongoDB
+    participant Usuarios
+    participant Catalogo as Catálogo
+    participant Dynamo as DynamoDB
+
+    Demo->>Pedidos: POST /api/pedidos
+    Pedidos->>Mongo: persistir PROCESANDO (items + pago embebidos)
+    Pedidos->>Usuarios: GET /api/usuarios/{id}
+    Usuarios->>Dynamo: lectura eventual
+    Pedidos->>Catalogo: GET producto (precio y stock)
+    Catalogo->>Dynamo: lectura eventual
+    Pedidos->>Catalogo: POST descontar-stock (UpdateItem condicional)
+    alt pago OK
+        Pedidos->>Mongo: COMPLETADO + pago APROBADO
+        Pedidos-->>Demo: 201
+    else forzar_fallo_pago o error después de reservar
+        Pedidos->>Catalogo: POST restaurar-stock
+        Pedidos->>Mongo: COMPENSADO + pago RECHAZADO
+        Pedidos-->>Demo: 409
+    else usuario 404 o stock insuficiente (antes de reservar)
+        Pedidos->>Mongo: COMPENSADO (sin tocar Catálogo)
+        Pedidos-->>Demo: 404 / 409
+    end
+    Demo->>Pedidos: GET /api/pedidos/{id}
+    Pedidos-->>Demo: estado + saga_log
+```
 
 ## Diagrama del Patrón Chain of Responsibility
-*(Pendiente de generar)*
+```mermaid
+flowchart TD
+    post["POST /api/pedidos"] --> saga["SAGA: persistir PROCESANDO"]
+    saga --> h1["ValidadorDeDatos"]
+    h1 -->|ok| h2["ValidadorDeUsuario"]
+    h2 -->|ok| h3["ValidadorDeStock"]
+    h3 -->|ok| h4["ReservarStock"]
+    h4 -->|ok| h5["ProcesadorDePago"]
+    h5 -->|ok| h6["ConfirmarPedido"]
+    h6 --> done["201 COMPLETADO"]
+
+    h1 -->|falla| c1["cortar cadena 400"]
+    h2 -->|falla| c2["cortar 404 — sin stock remoto"]
+    h3 -->|falla| c3["cortar 409 — sin stock remoto"]
+    h4 -->|falla parcial| c4["SAGA restaura lo ya descontado"]
+    h5 -->|forzar_fallo_pago| c5["SAGA restaura stock 409 COMPENSADO"]
+
+    c1 --> endC["COMPENSADO"]
+    c2 --> endC
+    c3 --> endC
+    c4 --> endC
+    c5 --> endC
+```
+
+**Cómo se separan en la defensa**
+
+- **CoR** estructura la lógica *dentro* de Pedidos: cada handler procesa o corta; agregar uno no toca a los demás (`PedidoCadenaConfig`).
+- **SAGA** es la transacción *entre* servicios: Pedidos persiste el pedido y, si el corte ocurre después de `ReservarStock`, llama a Catálogo para restaurar.
+
+La cadena CoR es el camino feliz. La SAGA envuelve esa cadena con estado persistido y rollback distribuido.
 
 ## Comandos de Ejecución
-1. Levantar bases de datos: `docker compose up -d`
-2. Levantar microservicios: `docker compose -f docker-compose.app.yml up --build`
-3. Swagger (etapa 1: cada API expone `GET /api/health`):
-   - Usuarios: http://localhost:8081/swagger-ui.html
-   - Catálogo: http://localhost:8082/swagger-ui.html
-   - Pedidos: http://localhost:8083/swagger-ui.html
+
+Bases (DynamoDB Local in-memory, Mongo, DynamoDB Admin):
+
+```bash
+docker compose up -d
+```
+
+Microservicios:
+
+```bash
+docker compose -f docker-compose.app.yml up --build -d
+./scripts/reset-demo.sh
+```
+
+`reset-demo.sh` vacía DynamoDB Local (in-memory), borra pedidos en Mongo, espera health y carga el seed (`usr_demo`, `prod_feliz` stock 5, `prod_comp` stock 2, `prod_agotado` stock 0). Solo recargar seed, sin borrar: `./scripts/seed-demo.sh`.
+
+Health:
+
+```bash
+curl http://localhost:8081/api/health
+curl http://localhost:8082/api/health
+curl http://localhost:8083/api/health
+```
+
+| Qué | URL |
+|---|---|
+| Swagger Usuarios | http://localhost:8081/swagger-ui.html |
+| Swagger Catálogo | http://localhost:8082/swagger-ui.html |
+| Swagger Pedidos | http://localhost:8083/swagger-ui.html |
+| DynamoDB Admin | http://localhost:8001 |
+| Mongo Compass | `mongodb://localhost:27017` → db `pedidos` → colección `pedidos` |
+
+DynamoDB Local está **in-memory**: si se reinicia `shopexpress-dynamo`, se pierden usuarios y productos; las apps recrean las tablas vacías.
 
 ## Testeo
-Se adjunta la colección de Postman `ShopExpress.postman_collection.json` en la raíz del proyecto para evidenciar el testeo de los endpoints requeridos.
+
+Colección Postman en la raíz:
+
+- `ShopExpress.postman_collection.json`
+- `ShopExpress.postman_environment.json` (URLs `localhost:8081/8082/8083`)
+
+Importar ambos en Postman, elegir el environment **ShopExpress localhost**, correr **00 Health**, **01 Feliz** y **02 Compensación** (Run folder). Esperado:
+
+- Feliz: `POST /api/pedidos` **201**, `estado=COMPLETADO`, stock baja 1. El `saga_log` lista los 6 handlers.
+- Compensación: **409**, `estado=COMPENSADO`, `saga_log` incluye restauración, stock igual que al inicio.
+
+Carpeta **03 Cortes**: usuario `usr_no_existe` → **404**; `prod_agotado` cantidad 1 → **409**, sin descontar stock.
+
+Ids del seed: `usr_demo`, `prod_feliz`, `prod_comp`, `prod_agotado`. Si `prod_feliz` llega a stock 0, `./scripts/reset-demo.sh`.

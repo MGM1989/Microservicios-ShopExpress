@@ -147,3 +147,139 @@ Lecciones para la etapa 4
 - Pedidos no debe “restar stock en Mongo”: llama a estos dos endpoints.
 - El paso de reserva de stock de la SAGA es descontar-stock; la compensación es restaurar-stock.
 - Un 409 de catálogo debe abortar la cadena y compensar lo ya hecho.
+
+
+Etapa 4: CoR + SAGA HTTP síncrona
+Fecha: 31/10/2026
+
+Objetivo: POST /api/pedidos recorre una cadena real de handlers y, si falla después de descontar stock, restaura el inventario. GET /api/pedidos/{id} muestra estado y saga_log.
+
+
+1. Spring Boot 4 cambió la URI de Mongo
+
+spring.data.mongodb.uri ya no alimenta el cliente. El contenedor arrancaba y Tomcat escuchaba en 8083, pero MongoClient iba a localhost:27017 (dentro del contenedor no hay Mongo). /api/health se colgaba 30 s en listCollections.
+
+Solución: spring.mongodb.uri (propiedad de Boot 4). El env SPRING_DATA_MONGODB_URI se interpola en el YAML, no hace falta renombrarlo en Compose.
+
+
+2. CoR no es un comentario: si un handler lanza, no corre el siguiente
+
+AbstractPedidoHandler llama a procesar() y solo entonces a next.handle().
+Orden: ValidadorDeDatos → ValidadorDeUsuario → ValidadorDeStock → ReservarStock → ProcesadorDePago → ConfirmarPedido.
+Agregar un handler no toca a los demás; se encadena en PedidoCadenaConfig.
+
+
+3. SAGA envuelve la cadena
+
+1. Persistir PROCESANDO en Mongo (documento embebido: items[] + pago).
+2. Ejecutar la cadena.
+3. Éxito → COMPLETADO (201).
+4. Corte después de ReservarStock → POST restaurar-stock y estado COMPENSADO.
+5. Corte antes de reservar (usuario 404, stock insuficiente) → COMPENSADO sin tocar Catálogo.
+
+forzar_fallo_pago=true es el interruptor de demo del pago simulado.
+
+
+4. RestClient y 404
+
+retrieve() por defecto convierte 4xx en excepción. Los GET a Usuarios/Catálogo usan exchange() para devolver Optional vacío en 404 y no romper la cadena con un 500.
+
+
+Cómo se validó la etapa 4 (estado OK)
+
+  POST usuario usr_saga + producto prod_saga_ok stock=2
+  POST /api/pedidos cantidad=1                  → 201 COMPLETADO, stock=1
+  POST /api/pedidos forzar_fallo_pago=true      → 409 COMPENSADO, stock vuelve a 1
+  POST usuario inexistente                      → 404 COMPENSADO (sin descontar)
+  POST cantidad=99                              → 409 COMPENSADO, stock intacto
+  GET  /api/pedidos/{id}                        → saga_log con cada handler
+
+Swagger Pedidos: http://localhost:8083/swagger-ui.html
+Mongo (Compass): mongodb://localhost:27017  db pedidos, colección pedidos
+DynamoDB Admin: http://localhost:8001  tabla Productos (ver stock)
+
+
+Lecciones para la etapa 5
+
+- El saga_log del GET es el guion de la defensa: se ve CoR y compensación sin abrir el código.
+- Postman: carpeta Feliz y carpeta Compensación con el mismo usuario/producto.
+- Documentar en el README que la SAGA es HTTP síncrona (orquestación), no colas.
+
+
+Etapa 5: Postman, diagramas y decisión síncrona
+Fecha: 31/10/2026
+
+No hay código de negocio nuevo. El riesgo era que el README siguiera diciendo “comunicación asíncrona” y que el docente no pudiera reproducir el flujo sin Swagger a mano.
+
+
+1. Colección real, no un placeholder
+
+ShopExpress.postman_collection.json + environment localhost.
+Carpetas: 00 Health, 01 Feliz, 02 Compensación, 03 Cortes.
+Feliz y Compensación crean su propio usuario/producto para no pisarse.
+Tests de Postman: altas 201 o 409 (re-ejecución); pedido feliz 201 COMPLETADO; compensación 409 + stock igual.
+
+
+2. Re-ejecutar Feliz agota el stock
+
+prod_pm_feliz nace con stock 2. Cada Run folder feliz resta 1. A la tercera vez el GET previo falla (stock 0) o el POST pedido da 409. En la demo: una pasada, o restaurar stock, o cambiar la variable producto_feliz.
+
+
+3. README alineado con lo que corre
+
+- Orquestación HTTP síncrona (se eliminó “asíncrona” del diseño vigente).
+- Apartado de decisión para la defensa (letra = orquestación; colas no pedidas).
+- Mermaid SAGA (secuencia) y CoR (handlers).
+- API Gateway marcado fuera de alcance.
+- URLs de Swagger, DynamoDB Admin y Compass.
+
+
+Cómo se validó la etapa 5 (estado OK)
+
+Se reprodujo el guion de la colección contra Docker (equivalente a Run folder):
+
+  Health x3 UP
+  Feliz: 201 COMPLETADO, saga_log con 6 handlers, stock -1
+  Compensación: 409 COMPENSADO, restaurado, stock igual
+  Cortes: 404 usuario y 409 stock insuficiente
+
+Importar en Postman: Collection → Import → los dos JSON de la raíz.
+
+
+Lecciones para la etapa 6
+
+- El sitio estático debe enlazar los tres Swagger y decir “el flujo completo está en Postman”.
+- No embeber una consola que pegue a las APIs (CORS y otro frontend que puede fallar en la demo).
+
+
+Etapa 6: sitio de defensa, seed y reset
+Fecha: 31/10/2026
+
+Objetivo: un solo URL (http://localhost:8080) para hablar y saltar a Swagger, más datos predecibles para no improvisar ids en la defensa.
+
+
+1. Sitio estático, sin consola
+
+nginx sirve HTML + Mermaid CDN. Los botones son enlaces a :8081/:8082/:8083 y Dynamo Admin :8001. Si el sitio llamara a las APIs haría falta CORS y otro frontend que puede fallar en 10 minutos.
+
+
+2. Seed fijo vs Postman que “crea todo”
+
+El guion usa usr_demo / prod_feliz (stock 5) / prod_comp (stock 2) / prod_agotado (stock 0).
+reset-demo.sh reinicia Dynamo in-memory, borra la colección pedidos, espera health y POST del seed.
+seed-demo.sh solo hace POST (201 o 409): no sirve para volver el stock a 5 si el producto ya existía.
+
+
+3. El reset no hace --build
+
+Reiniciar datos es rápido. Si cambió código Java hay que `docker compose -f docker-compose.app.yml up --build -d` y después el reset.
+
+
+Cómo se validó la etapa 6
+
+  ./scripts/reset-demo.sh
+  GET http://localhost:8080 → 200, título ShopExpress
+  GET usr_demo, prod_feliz stock 5
+  POST pedido feliz → 201 COMPLETADO
+  POST forzar_fallo_pago prod_comp → 409, stock 2 intacto
+

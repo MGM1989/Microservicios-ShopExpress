@@ -35,7 +35,13 @@ services:
       - "8083:8083"
     environment:
       SPRING_DATA_MONGODB_URI: mongodb://mongodb-pedidos:27017/pedidos
+      SHOPEXPRESS_USUARIOS_BASE_URL: http://servicio-usuarios:8081
+      SHOPEXPRESS_CATALOGO_BASE_URL: http://servicio-catalogo:8082
     depends_on:
       mongodb-pedidos:
         condition: service_healthy
+      servicio-usuarios:
+        condition: service_started
+      servicio-catalogo:
+        condition: service_started
     restart: unless-stopped
